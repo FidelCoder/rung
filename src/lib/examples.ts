@@ -1,0 +1,65 @@
+import { parseEther, zeroAddress } from 'viem';
+import type { ProjectView, RoundView } from './types';
+
+const names = [
+  ['OpenKit', 'Small tools. A big head start.', 'An open-source toolkit that helps developers ship their first BOT Chain integration in an afternoon.', 'Developer tools', 'Ship the transaction toolkit', 'Publish a TypeScript package with wallet connection, transaction simulation, and receipt tracking.', 'A public repository, published package, and two independent apps demonstrating the integration.', '7200', '10000'],
+  ['Fieldwork', 'A better signal, together.', 'A community-owned sensor network turning local environmental data into a shared public resource.', 'DePIN', 'Connect the pilot network', 'Bring the first five independent sensor stations online and publish their readings.', 'Public readings with signed device receipts for seven continuous days.', '3400', '8000'],
+  ['Bridgeworks', 'Bring more builders into the room.', 'A community program pairing new BOT Chain developers with experienced builders and practical starter guides.', 'Public goods', 'Run the first builder clinic', 'Host three hands-on sessions and publish a starter guide based on what participants need.', 'At least five new builders complete a first onchain project and share what they learned.', '5600', '12000'],
+  ['Proof of Care', 'Make contribution count.', 'Open research and practical guides that make ecosystem participation easier for the next builder.', 'Public goods', 'Publish the builder field guide', 'Publish a complete, accessible getting-started guide with independently reproduced examples.', 'Five external builders complete the guide and document their results.', '1850', '5000'],
+] as const;
+
+export const examples: ProjectView[] = names.map((p, i) => ({
+  id: i + 1,
+  name: p[0],
+  description: p[2],
+  category: p[3],
+  builder: zeroAddress,
+  verified: i === 0,
+  stageNumber: i === 0 ? 2 : 1,
+  source: 'preview',
+  stage: {
+    address: zeroAddress,
+    asset: zeroAddress,
+    symbol: 'BOT',
+    decimals: 18,
+    goal: parseEther(p[8]).toString(),
+    raised: parseEther(p[7]).toString(),
+    deadline: Math.floor(Date.now() / 1000) + (i + 8) * 86400,
+    deliveryDeadline: Math.floor(Date.now() / 1000) + 60 * 86400,
+    claimed: false,
+    cancelled: false,
+    refundable: false,
+    reviewState: 0,
+    terms: { title: p[4], deliverable: p[5], criteria: p[6] },
+    evidenceURI: '',
+    reviewReason: '',
+    submittedAt: 0,
+    rejectedAt: 0,
+    evidenceRound: 0,
+    approvalWeight: '0',
+    rejectionWeight: '0',
+    participationWeight: '0',
+    voterCount: 0,
+  },
+}));
+
+export const exampleRounds: RoundView[] = [{
+  address: zeroAddress,
+  title: 'The builder round',
+  description: 'Recognizing open tools, practical infrastructure, and the people making BOT Chain easier to build on.',
+  rules: 'Published work, independent adoption, and evidence of sustained benefit. A project must have an approved milestone to apply.',
+  rulesURI: '',
+  symbol: 'BOT',
+  decimals: 18,
+  budget: parseEther('50000').toString(),
+  allocated: '0',
+  deadline: Math.floor(Date.now() / 1000) + 14 * 86400,
+  decisionDeadline: Math.floor(Date.now() / 1000) + 28 * 86400,
+  roundOwner: zeroAddress,
+  reviewer: zeroAddress,
+  treasury: zeroAddress,
+  finalized: false,
+  cancelled: false,
+  source: 'preview',
+  applications: [],
+}];

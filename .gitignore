@@ -1,0 +1,13 @@
+node_modules/
+.next/
+out/
+cache/
+broadcast/
+.env*
+!.env.example
+*.tsbuildinfo
+indexer/.ponder/
+# Ponder drops a schema copy at the repo root (see indexer/README.md).
+generated/
+test-results/
+.data/

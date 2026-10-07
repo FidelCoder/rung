@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  contracts:
+    name: Contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.8.5
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 12.10.1
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: forge build --sizes
+      - run: forge test -vvv
+      - name: Static analysis (slither)
+        run: |
+          pip install slither-analyzer
+          slither . --filter-paths "node_modules|out|cache" --exclude-dependencies --fail-none
+
+  web:
+    name: Web app
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 12.10.1
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm contracts
+      - run: pnpm typecheck
+      - run: pnpm build
+        env:
+          NEXT_PUBLIC_CHAIN_ID: "677"
+          NEXT_PUBLIC_RPC_URL: https://rpc.botchain.ai
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Web route smoke tests
+        run: pnpm test:web
+
+  indexer:
+    name: Indexer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 12.10.1
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm contracts
+      - run: pnpm indexer:check
+      - name: Reconcile a configured deployment
+        env:
+          RUNG_ADDRESS: ${{ secrets.RUNG_ADDRESS }}
+          RPC_URL: ${{ vars.RPC_URL }}
+          INDEXER_URL: ${{ vars.INDEXER_URL }}
+        run: |
+          if [ -z "$RUNG_ADDRESS" ]; then
+            echo "Skipped: configure the RUNG_ADDRESS secret to reconcile a deployed registry."
+          else
+            pnpm reconcile
+          fi

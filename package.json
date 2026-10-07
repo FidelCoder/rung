@@ -1,0 +1,45 @@
+{
+  "name": "rung",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@12.10.1",
+  "engines": {
+    "node": ">=24.21.0 <25",
+    "pnpm": ">=12.10.1 <13"
+  },
+  "scripts": {
+    "dev": "next dev --hostname 0.0.0.0",
+    "build": "next build",
+    "start": "next start --hostname 0.0.0.0",
+    "typecheck": "tsc --noEmit",
+    "contracts": "forge build && node scripts/abis.mjs",
+    "test:contracts": "forge test",
+    "indexer:check": "tsc --noEmit -p indexer",
+    "indexer": "ponder dev --root indexer",
+    "indexer:start": "ponder start --root indexer",
+    "reconcile": "node scripts/reconcile.mjs",
+    "test:web": "node tests/web.mjs"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "5.6.1",
+    "@tanstack/react-query": "^5.104.1",
+    "hono": "^4.13.13",
+    "lucide-react": "^1.52.0",
+    "next": "16.3.8",
+    "ponder": "0.18.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "viem": "^2.57.3",
+    "wagmi": "3.7.7",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^24.19.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "playwright": "^1.63.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^6.0.3"
+  }
+}

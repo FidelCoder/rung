@@ -1,0 +1,15 @@
+allowBuilds:
+  esbuild: true
+minimumReleaseAgeExclude:
+  # Verified via Ponder's GitHub release tag and npm trusted-publisher provenance.
+  - ponder@0.18.0
+overrides:
+  # Ponder 0.18.0 currently pins these vulnerable transitive versions.
+  "@hono/node-server": ^1.19.17
+  drizzle-orm: ^0.45.3
+  kysely: ^0.28.17
+  "@graphql-tools/utils": ^12.0.3
+peerDependencyRules:
+  allowedVersions:
+    # abitype's optional Zod schema subpath is unused; the app itself uses Zod 4.
+    "abitype@0.10.3>zod": ^4.6.5
