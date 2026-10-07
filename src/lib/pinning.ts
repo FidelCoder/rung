@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { keccak256, toBytes } from 'viem';
+import { put } from '@vercel/blob';
 
 export type Pinned = { uri: string; hash: string };
 
@@ -43,11 +44,21 @@ export async function pinJson(kind: string, data: unknown): Promise<Pinned> {
     if (!body.uri) throw new Error('Pinning service did not return a uri');
     return { uri: body.uri, hash };
   }
+  if (process.env.BLOB_READ_WRITE_TOKEN) {
+    const blob = await put(`metadata/${hash.slice(2)}.json`, content, {
+      access: 'public',
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      contentType: 'application/json',
+      cacheControlMaxAge: 31_536_000,
+    });
+    return { uri: blob.url, hash };
+  }
   const base = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   if (process.env.NODE_ENV === 'production' && (
     process.env.ALLOW_LOCAL_METADATA !== 'true' || !isLoopbackOrigin(base)
   )) {
-    throw new Error('Configure PINNING_ENDPOINT for durable metadata, or enable local metadata for a localhost-only test.');
+    throw new Error('Configure PINNING_ENDPOINT or connect Vercel Blob for durable metadata, or enable local metadata for a localhost-only test.');
   }
   const id = createHash('sha256').update(content).digest('hex').slice(0, 40);
   await mkdir(LOCAL_DIR, { recursive: true });

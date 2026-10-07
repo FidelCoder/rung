@@ -1,0 +1,16 @@
+.git
+.vercel
+node_modules
+**/node_modules
+.next
+out
+cache
+broadcast
+generated
+test-results
+.data
+indexer/.ponder
+*.tsbuildinfo
+.env
+.env.*
+!.env.example

@@ -11,3 +11,4 @@ indexer/.ponder/
 generated/
 test-results/
 .data/
+.vercel
