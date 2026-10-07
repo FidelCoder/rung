@@ -2,7 +2,7 @@ import { createConfig, http } from 'wagmi';
 import { injected } from 'wagmi/connectors';
 import { botChain } from './chain';
 
-const rpc = process.env.NEXT_PUBLIC_RPC_URL || 'https://rpc.botchain.ai';
+const rpc = process.env.NEXT_PUBLIC_RPC_URL || 'https://rpc.bohr.life';
 
 export const wagmiConfig = createConfig({
   chains: [botChain],

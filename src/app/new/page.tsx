@@ -14,7 +14,7 @@ export default function NewProjectPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Start a project</h1>
           <p className="mt-1 text-sm text-zinc-500">
-            Describe the project, define the first stage&apos;s terms, then publish both onchain. You will sign two transactions.
+            Describe the project, set its first stage, then publish on Bohr Testnet. You will confirm two transactions and pay their network fees in BOT; the stage goal is not charged at launch.
           </p>
         </div>
         <Link href="/workspace" className="text-sm text-blue-600 hover:underline">

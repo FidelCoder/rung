@@ -2,10 +2,10 @@
 
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { parseEventLogs, zeroAddress } from 'viem';
-import { useConnection, usePublicClient } from 'wagmi';
+import { parseEventLogs, zeroAddress, type TransactionReceipt } from 'viem';
+import { useConnection, usePublicClient, useSwitchChain } from 'wagmi';
 import { rungAbi } from '@/lib/abi';
-import { preview, rungAddress } from '@/lib/chain';
+import { botChain, preview, rungAddress } from '@/lib/chain';
 import { amount, days, errorMessage, short } from '@/lib/format';
 import { projectSchema, termsSchema } from '@/lib/metadata';
 import { useTx } from '@/lib/tx';
@@ -21,6 +21,7 @@ const STEPS = ['Project details', 'Stage terms', 'Review & publish'] as const;
 const CATEGORIES: Category[] = ['Developer tools', 'AI & agents', 'DePIN', 'Public goods'];
 
 type Flow = { phase: 'idle' | 'pinning' | 'creating' | 'opening' | 'done' | 'error'; projectId?: number; error?: string };
+type PublishReadiness = { status: 'idle' | 'checking' | 'ready' | 'error'; balance?: bigint; message?: string };
 
 // ── Offchain draft (Chunk 5): the wizard survives a refresh via localStorage. ──
 const DRAFT_KEY = 'rung:draft:new-project';
@@ -63,8 +64,9 @@ function clearDraft() {
 
 export function NewProjectForm() {
   const router = useRouter();
-  const { address } = useConnection();
+  const { address, chainId } = useConnection();
   const client = usePublicClient();
+  const { switchChain, isPending: isSwitchPending, error: switchError } = useSwitchChain();
   const createTx = useTx();
   const stageTx = useTx();
 
@@ -73,6 +75,8 @@ export function NewProjectForm() {
   const [pinning, setPinning] = useState(false);
   const [pinError, setPinError] = useState<string>();
   const [flow, setFlow] = useState<Flow>({ phase: 'idle' });
+  const [readiness, setReadiness] = useState<PublishReadiness>({ status: 'idle' });
+  const [readinessRetry, setReadinessRetry] = useState(0);
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -91,6 +95,39 @@ export function NewProjectForm() {
   const [createdId, setCreatedId] = useState<number>();
   const [hydrated, setHydrated] = useState(false);
   const [restored, setRestored] = useState(false);
+
+  // Before opening a wallet prompt, confirm the connected account is on the
+  // configured chain, the registry has code, project creation is enabled, and
+  // the account has native BOT available for network fees.
+  useEffect(() => {
+    let cancelled = false;
+    if (step !== 2 || !address || chainId !== botChain.id) {
+      setReadiness({ status: 'idle' });
+      return () => { cancelled = true; };
+    }
+    if (!client || !rungAddress) {
+      setReadiness({ status: 'error', message: 'The Rung registry is not configured for this network.' });
+      return () => { cancelled = true; };
+    }
+    setReadiness({ status: 'checking' });
+    void Promise.all([
+      client.getBalance({ address }),
+      client.getBytecode({ address: rungAddress }),
+      client.readContract({ address: rungAddress, abi: rungAbi, functionName: 'creationPaused' }),
+    ]).then(([balance, bytecode, creationPaused]) => {
+      if (cancelled) return;
+      if (!bytecode || bytecode === '0x') {
+        setReadiness({ status: 'error', message: `No Rung registry code was found on ${botChain.name}. Check the app network configuration.` });
+      } else if (creationPaused) {
+        setReadiness({ status: 'error', message: 'New project creation is paused on this registry. Try again after the protocol admin reopens it.' });
+      } else {
+        setReadiness({ status: 'ready', balance });
+      }
+    }).catch(error => {
+      if (!cancelled) setReadiness({ status: 'error', message: errorMessage(error) });
+    });
+    return () => { cancelled = true; };
+  }, [address, chainId, client, readinessRetry, step]);
 
   // Restore a saved draft once on mount; only start saving after hydration so
   // the initial empty state never overwrites an existing draft.
@@ -213,18 +250,19 @@ export function NewProjectForm() {
       let projectId = createdId;
       if (projectId == null) {
         setFlow({ phase: 'creating' });
+        let projectReceipt: TransactionReceipt | undefined;
         const firstHash = await createTx.send({
           address: rungAddress,
           abi: rungAbi,
           functionName: 'createProject',
           args: [name.trim(), project.uri, project.hash],
-        });
+        }, { onConfirm: receipt => { projectReceipt = receipt; } });
         if (!firstHash) {
           setFlow({ phase: 'idle' });
           return;
         }
-        const receipt = await client.getTransactionReceipt({ hash: firstHash });
-        const created = parseEventLogs({ abi: rungAbi, logs: receipt.logs, eventName: 'ProjectCreated' });
+        if (!projectReceipt) throw new Error('The project transaction confirmed, but its receipt was not returned. Retry publishing to open the first stage.');
+        const created = parseEventLogs({ abi: rungAbi, logs: projectReceipt.logs, eventName: 'ProjectCreated' });
         const mine = created.find(log => log.args.builder.toLowerCase() === (address ?? '').toLowerCase()) ?? created[0];
         if (!mine) throw new Error('ProjectCreated event was not found in the receipt.');
         projectId = Number(mine.args.projectId);
@@ -257,6 +295,17 @@ export function NewProjectForm() {
   const reviewDelivery = deliveryDate && reviewDeadline ? resolveDelivery(deliveryDate, reviewDeadline) : 0;
   const reviewGoal = parseGoal(goal, 18);
   const busy = pinning || createTx.pending || stageTx.pending || flow.phase === 'pinning' || flow.phase === 'creating' || flow.phase === 'opening';
+  const wrongChain = Boolean(address && chainId !== botChain.id);
+  const hasNativeGas = readiness.status === 'ready' && (readiness.balance ?? 0n) > 0n;
+  const publishLabel = flow.phase === 'pinning'
+    ? 'Saving metadata…'
+    : flow.phase === 'creating'
+      ? 'Creating project…'
+      : flow.phase === 'opening'
+        ? 'Opening first stage…'
+        : flow.phase === 'error' && createdId != null
+          ? 'Retry opening stage'
+          : 'Publish project & open stage';
   const localMetadata = [projectMeta?.uri, termsMeta?.uri].some(uri =>
     uri?.startsWith('http://localhost:') || uri?.startsWith('http://127.0.0.1:') || uri?.startsWith('http://[::1]:')
   );
@@ -327,7 +376,7 @@ export function NewProjectForm() {
           <form onSubmit={submitProject} className="space-y-4">
             <div>
               <h2 className="text-base font-semibold">Project details</h2>
-              <p className="mt-1 text-sm text-zinc-500">Published to IPFS-style storage and recorded onchain with your first stage.</p>
+              <p className="mt-1 text-sm text-zinc-500">Project details are stored offchain; their content hash is recorded onchain with your project.</p>
             </div>
             <Field label="Project name" hint="3–60 characters." error={errors.name}>
               <input className={inputClass} value={name} onChange={e => setName(e.target.value)} placeholder="OpenKit" maxLength={60} />
@@ -370,7 +419,7 @@ export function NewProjectForm() {
             <div>
               <h2 className="text-base font-semibold">First stage terms</h2>
               <p className="mt-1 text-sm text-zinc-500">
-                These terms are pinned, hashed, and stored in the escrow. Reviewers judge delivery against them.
+                The terms are stored offchain, with their URI and content hash recorded by the stage escrow. Backers use them to review delivery.
               </p>
             </div>
             <Field label="Stage title" hint="5–100 characters." error={errors.title}>
@@ -474,15 +523,70 @@ export function NewProjectForm() {
             )}
 
             {localMetadata && (
-              <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                Metadata is stored on this computer and its links use localhost. Use this for local testnet checks; configure durable pinning before sharing the project with other people.
-              </p>
+              <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                <p className="font-medium">This draft’s metadata is stored on this computer.</p>
+                <p className="mt-1 text-xs">Its localhost links will not open for other people. For a shareable project, use the <a className="font-medium underline underline-offset-2" href="https://rung-rust.vercel.app/new" target="_blank" rel="noreferrer">live project launcher</a>, which stores metadata in public cloud storage.</p>
+              </div>
             )}
 
             {preview && (
               <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
                 Preview mode — no contract address is configured (set NEXT_PUBLIC_RUNG_ADDRESS), so publishing is disabled.
                 Your form is saved; configure the contract and publish for real.
+              </p>
+            )}
+
+            {address && wrongChain && (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                <div className="text-sm text-amber-900">
+                  <p className="font-medium">Switch your wallet to {botChain.name} (chain {botChain.id}) to publish.</p>
+                  <p className="mt-1 text-xs">This flow uses native BOT for network fees. It does not use ETH.</p>
+                  {switchError && <p className="mt-2 text-xs text-red-700">{errorMessage(switchError)}</p>}
+                </div>
+                <Button onClick={() => switchChain({ chainId: botChain.id })} loading={isSwitchPending}>
+                  Switch network
+                </Button>
+              </div>
+            )}
+
+            {address && !wrongChain && readiness.status === 'checking' && (
+              <p className="flex items-center gap-2 rounded-xl bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                <Spinner /> Checking the registry and your BOT gas balance on {botChain.name}…
+              </p>
+            )}
+
+            {address && !wrongChain && readiness.status === 'error' && (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-800">
+                <span>Could not confirm publishing is ready: {readiness.message}</span>
+                <Button variant="secondary" onClick={() => setReadinessRetry(value => value + 1)}>Check again</Button>
+              </div>
+            )}
+
+            {address && !wrongChain && readiness.status === 'ready' && (readiness.balance ?? 0n) === 0n && (
+              <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                This wallet has no native BOT for network fees. Get test BOT from the{' '}
+                <a className="font-medium underline underline-offset-2" href="https://faucet.botchain.ai/en/basic" target="_blank" rel="noreferrer">BOT Chain faucet</a>, then check again. ETH is not used for gas on this network.
+              </p>
+            )}
+
+            {address && !wrongChain && hasNativeGas && (
+              <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                <p className="font-medium">{botChain.name} is ready · wallet balance {amount((readiness.balance ?? 0n).toString(), 18)} BOT.</p>
+                <p className="mt-1 text-xs">Publishing uses two signatures and pays network fees in BOT. The stage goal is not charged during publishing; backers fund it later.</p>
+              </div>
+            )}
+
+            {(flow.phase === 'creating' || flow.phase === 'opening') && (
+              <p className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                {flow.phase === 'creating'
+                  ? 'Step 1 of 2: confirm the project record in your wallet. After it confirms, you will approve a second transaction to open the first stage.'
+                  : `Step 2 of 2: project #${createdId} is confirmed. Approve the next wallet request to open its first funding stage.`}
+              </p>
+            )}
+
+            {flow.phase === 'error' && createdId != null && (
+              <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                Project #{createdId} is already onchain. Retrying will only open its first stage; it will not create a duplicate project.
               </p>
             )}
 
@@ -500,8 +604,8 @@ export function NewProjectForm() {
                 Back
               </Button>
               {address ? (
-                <Button onClick={publish} loading={busy} disabled={preview || !rungAddress}>
-                  Publish project &amp; open stage
+                <Button onClick={publish} loading={busy} disabled={preview || !rungAddress || wrongChain || !hasNativeGas}>
+                  {publishLabel}
                 </Button>
               ) : (
                 <span className="text-sm text-zinc-500">Wallet required to publish</span>

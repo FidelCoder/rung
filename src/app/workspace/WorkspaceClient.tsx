@@ -58,7 +58,7 @@ export function WorkspaceClient() {
     return (
       <Card className="flex flex-col items-start gap-3">
         <h2 className="text-base font-semibold">You haven&apos;t started a project yet</h2>
-        <p className="text-sm text-zinc-500">Create a project and open its first stage — it takes two transactions.</p>
+        <p className="text-sm text-zinc-500">Publish on Bohr Testnet with two wallet approvals. Network fees use BOT, and the stage goal is not charged at launch.</p>
         <Link
           href="/new"
           className="inline-flex items-center gap-2 rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-zinc-700"

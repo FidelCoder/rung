@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from 'react';
 import { useConnection, usePublicClient, useWriteContract } from 'wagmi';
-import type { Abi, Address, Hash } from 'viem';
+import type { Abi, Address, Hash, TransactionReceipt } from 'viem';
 import { errorMessage } from './format';
 import { botChain } from './chain';
 
@@ -17,7 +17,7 @@ export function useTx() {
   const [hash, setHash] = useState<Hash | undefined>();
   const [error, setError] = useState<string | undefined>();
 
-  const send = useCallback(async (tx: TxRequest, opts?: { onConfirm?: () => void }) => {
+  const send = useCallback(async (tx: TxRequest, opts?: { onConfirm?: (receipt: TransactionReceipt) => void }) => {
     setStatus('signing');
     setError(undefined);
     try {
@@ -30,7 +30,7 @@ export function useTx() {
       const receipt = await publicClient!.waitForTransactionReceipt({ hash: h });
       if (receipt.status !== 'success') throw new Error('Transaction reverted onchain.');
       setStatus('done');
-      opts?.onConfirm?.();
+      opts?.onConfirm?.(receipt);
       return h;
     } catch (e) {
       setError(errorMessage(e));

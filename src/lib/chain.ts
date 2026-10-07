@@ -1,7 +1,9 @@
 import { defineChain, isAddress, zeroAddress, type Address } from 'viem';
 
-const id = Number(process.env.NEXT_PUBLIC_CHAIN_ID || 677);
-const rpc = process.env.NEXT_PUBLIC_RPC_URL || 'https://rpc.botchain.ai';
+// The app is currently deployed against Bohr Testnet. Fall back to testnet so
+// a missing local env file can never send a builder toward the mainnet wallet.
+const id = Number(process.env.NEXT_PUBLIC_CHAIN_ID || 968);
+const rpc = process.env.NEXT_PUBLIC_RPC_URL || 'https://rpc.bohr.life';
 export const botChain = defineChain({
   id, name: id === 31337 ? 'Local BOT' : id === 677 ? 'BOT Chain' : id === 968 ? 'Bohr Testnet (BOT Chain)' : 'BOT Network',
   nativeCurrency: { name: 'BOT', symbol: 'BOT', decimals: 18 },

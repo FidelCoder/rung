@@ -5,7 +5,7 @@ import { examples, exampleRounds } from './examples';
 import { safeLink } from './metadata';
 import type { ProjectView, RoundView, StageTerms, StageView, ApplicationView } from './types';
 
-export const publicClient = createPublicClient({ chain: botChain, transport: http(process.env.NEXT_PUBLIC_RPC_URL || 'https://rpc.botchain.ai') });
+export const publicClient = createPublicClient({ chain: botChain, transport: http(process.env.NEXT_PUBLIC_RPC_URL || 'https://rpc.bohr.life') });
 
 const REVIEW_STATES = ['None', 'Community vote open', 'Changes requested', 'Community approved'] as const;
 export function reviewStateLabel(state: number) { return REVIEW_STATES[state] ?? 'None'; }
